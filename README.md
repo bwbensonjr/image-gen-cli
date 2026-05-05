@@ -3,6 +3,35 @@
 A command line interface for generating images. The intial focus will
 be on using the OpenAI API and `gpt-image-2`.
 
+## Install
+
+Install with [`uv`](https://docs.astral.sh/uv/) so `image-gen` is
+available on your `PATH`. From a clone of this repository:
+
+```sh
+uv tool install --editable .
+```
+
+Or install directly from GitHub:
+
+```sh
+uv tool install git+https://github.com/bwbensonjr/image-gen-cli
+```
+
+`uv` places the launcher in its tool-bin directory (typically
+`~/.local/bin`). If `image-gen` is not found after install, run `uv
+tool update-shell` once and restart your shell, or check the location
+with `uv tool dir --bin`.
+
+`OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL`) must be set in
+your shell environment when invoking `image-gen`.
+
+To upgrade after pulling new commits (non-editable installs):
+
+```sh
+uv tool upgrade image-gen-cli
+```
+
 ## Behavior 
 
 - Accepts an overall prompt describing what is wanted 
