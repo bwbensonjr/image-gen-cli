@@ -39,11 +39,14 @@ def test_missing_api_key_exits_2(monkeypatch, capsys):
 def test_main_happy_path_prints_paths_to_stdout(monkeypatch, capsys, tmp_path):
     _set_api_key(monkeypatch)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        generate,
-        "run",
-        lambda prompt, files, base, client=None: [Path("out-1.png")],
-    )
+    calls = {}
+
+    def fake_run(prompt, files, base, client=None, verbose=False, image_model="gpt-image-2"):
+        calls["verbose"] = verbose
+        calls["image_model"] = image_model
+        return [Path("out-1.png")]
+
+    monkeypatch.setattr(generate, "run", fake_run)
 
     rc = cli.main(["-o", "out", "a cat"])
 
@@ -51,6 +54,43 @@ def test_main_happy_path_prints_paths_to_stdout(monkeypatch, capsys, tmp_path):
     assert rc == 0
     assert captured.out.strip() == "out-1.png"
     assert "Generating image..." in captured.err
+    assert calls["verbose"] is False
+    assert calls["image_model"] == "gpt-image-2"
+
+
+def test_main_image_model_override(monkeypatch, capsys, tmp_path):
+    _set_api_key(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    calls = {}
+
+    def fake_run(prompt, files, base, client=None, verbose=False, image_model="gpt-image-2"):
+        calls["image_model"] = image_model
+        return [Path("out-1.png")]
+
+    monkeypatch.setattr(generate, "run", fake_run)
+
+    rc = cli.main(["--image-model", "gpt-image-1.5", "a cat"])
+
+    assert rc == 0
+    assert calls["image_model"] == "gpt-image-1.5"
+
+
+def test_main_verbose_passes_verbose_to_run(monkeypatch, capsys, tmp_path):
+    _set_api_key(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    calls = {}
+
+    def fake_run(prompt, files, base, client=None, verbose=False, image_model="gpt-image-2"):
+        calls["verbose"] = verbose
+        calls["image_model"] = image_model
+        return [Path("out-1.png")]
+
+    monkeypatch.setattr(generate, "run", fake_run)
+
+    rc = cli.main(["-v", "a cat"])
+
+    assert rc == 0
+    assert calls["verbose"] is True
 
 
 def test_main_missing_input_file_exits_2(monkeypatch, capsys, tmp_path):

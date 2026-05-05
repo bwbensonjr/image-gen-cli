@@ -35,10 +35,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output filename base; images are written as BASE-1.png, BASE-2.png, ...",
     )
     parser.add_argument(
+        "--image-model",
+        default="gpt-image-2",
+        metavar="MODEL",
+        help="Image generation model passed to the image_generation tool (default: gpt-image-2).",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="Show full tracebacks on error.",
+        help=(
+            "Request reasoning summaries, dump response output items "
+            "(model, reasoning, tool calls, messages) to stderr, and "
+            "show full tracebacks on error."
+        ),
     )
     parser.add_argument(
         "--version",
@@ -79,7 +89,13 @@ def main(argv: list[str] | None = None) -> int:
     from image_gen_cli import generate
 
     try:
-        written = generate.run(args.prompt, input_paths, args.output)
+        written = generate.run(
+            args.prompt,
+            input_paths,
+            args.output,
+            verbose=args.verbose,
+            image_model=args.image_model,
+        )
     except FileNotFoundError as e:
         _print_error(f"error: input file not found: {e}", args.verbose)
         return 2
