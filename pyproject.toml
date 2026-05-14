@@ -1,10 +1,34 @@
 [project]
 name = "image-gen-cli"
 version = "0.1.0"
+description = "Command-line tool for generating images via the OpenAI API."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+authors = [
+    { name = "Brent Benson", email = "bwbensonjr@gmail.com" },
+]
+keywords = ["openai", "image-generation", "cli", "gpt-image"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Utilities",
+]
 dependencies = [
     "openai>=2.34.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/bwbensonjr/image-gen-cli"
+Repository = "https://github.com/bwbensonjr/image-gen-cli"
+Issues = "https://github.com/bwbensonjr/image-gen-cli/issues"
 
 [project.scripts]
 image-gen = "image_gen_cli.cli:main"
@@ -15,6 +39,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/image_gen_cli"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".claude",
+    ".github",
+    "CLAUDE.md",
+    "tests",
+    "docs",
+]
 
 [tool.uv]
 package = true

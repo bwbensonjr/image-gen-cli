@@ -6,7 +6,15 @@ be on using the OpenAI API and `gpt-image-2`.
 ## Install
 
 Install with [`uv`](https://docs.astral.sh/uv/) so `image-gen` is
-available on your `PATH`. From a clone of this repository:
+available on your `PATH`.
+
+From PyPI:
+
+```sh
+uv tool install image-gen-cli
+```
+
+From a clone of this repository:
 
 ```sh
 uv tool install --editable .
