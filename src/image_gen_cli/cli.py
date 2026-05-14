@@ -22,9 +22,9 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="PATH",
         help=(
-            "Markdown/text or image file to attach as additional context. "
-            "Repeatable. Image types: png/jpg/webp/gif; other extensions are "
-            "treated as text."
+            "Markdown/text, image, or PDF file to attach as additional context. "
+            "Repeatable. Image types: png/jpg/webp/gif; .pdf is sent as a file "
+            "attachment; other extensions are treated as text."
         ),
     )
     parser.add_argument(

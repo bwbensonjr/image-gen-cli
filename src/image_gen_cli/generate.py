@@ -4,7 +4,7 @@ import base64
 import mimetypes
 import sys
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, Iterable, TextIO
 
 from openai import OpenAI
 
@@ -24,10 +24,15 @@ class NoImageReturnedError(RuntimeError):
     """Raised when the model response contains no image_generation_call output."""
 
 
-def build_input(prompt: str, input_files: list[Path]) -> str | list[dict[str, Any]]:
+def build_input(
+    prompt: str,
+    input_files: list[Path],
+    file_id_map: dict[Path, str] | None = None,
+) -> str | list[dict[str, Any]]:
     if not input_files:
         return prompt
 
+    file_id_map = file_id_map or {}
     parts: list[dict[str, Any]] = [{"type": "input_text", "text": prompt}]
     for path in input_files:
         if not path.exists():
@@ -41,12 +46,25 @@ def build_input(prompt: str, input_files: list[Path]) -> str | list[dict[str, An
                 "detail": "auto",
                 "image_url": f"data:{mime};base64,{b64}",
             })
+        elif suffix == ".pdf":
+            file_id = file_id_map.get(path)
+            if file_id is None:
+                raise ValueError(
+                    f"PDF input must be uploaded via the Files API first: {path}"
+                )
+            parts.append({"type": "input_file", "file_id": file_id})
         elif _looks_like_image(suffix):
             raise ValueError(
                 f"unsupported image type: {path.suffix}. Use png/jpg/webp/gif."
             )
         else:
-            text = path.read_text()
+            try:
+                text = path.read_text()
+            except UnicodeDecodeError as e:
+                raise ValueError(
+                    f"cannot read {path} as text ({e.reason}). Supported binary "
+                    f"inputs: png/jpg/webp/gif/pdf."
+                ) from e
             parts.append({
                 "type": "input_text",
                 "text": f"<file: {path.name}>\n{text}",
@@ -79,17 +97,23 @@ def run(
     image_model: str = IMAGE_MODEL,
 ) -> list[Path]:
     api_client = client if client is not None else OpenAI()
-    payload = build_input(prompt, input_files)
+    stream = log_stream or sys.stderr
 
-    create_kwargs: dict[str, Any] = {
-        "model": MODEL,
-        "input": payload,
-        "tools": [{"type": "image_generation", "model": image_model}],
-    }
-    if verbose:
-        create_kwargs["reasoning"] = {"summary": "auto"}
+    file_id_map = _upload_pdfs(api_client, input_files, verbose=verbose, stream=stream)
+    try:
+        payload = build_input(prompt, input_files, file_id_map=file_id_map)
 
-    response = api_client.responses.create(**create_kwargs)
+        create_kwargs: dict[str, Any] = {
+            "model": MODEL,
+            "input": payload,
+            "tools": [{"type": "image_generation", "model": image_model}],
+        }
+        if verbose:
+            create_kwargs["reasoning"] = {"summary": "auto"}
+
+        response = api_client.responses.create(**create_kwargs)
+    finally:
+        _delete_files(api_client, file_id_map.values(), verbose=verbose, stream=stream)
 
     if verbose:
         _log_response(response, log_stream or sys.stderr)
@@ -104,6 +128,42 @@ def run(
             "model returned no image. Try rephrasing the prompt."
         )
     return write_images(images, output_base)
+
+
+def _upload_pdfs(
+    api_client: OpenAI,
+    input_files: list[Path],
+    verbose: bool,
+    stream: TextIO,
+) -> dict[Path, str]:
+    file_id_map: dict[Path, str] = {}
+    for path in input_files:
+        if path.suffix.lower() != ".pdf":
+            continue
+        if not path.exists():
+            raise FileNotFoundError(path)
+        with path.open("rb") as fh:
+            uploaded = api_client.files.create(file=fh, purpose="user_data")
+        file_id_map[path] = uploaded.id
+        if verbose:
+            print(f"[upload] {path.name} -> {uploaded.id}", file=stream)
+    return file_id_map
+
+
+def _delete_files(
+    api_client: OpenAI,
+    file_ids: Iterable[str],
+    verbose: bool,
+    stream: TextIO,
+) -> None:
+    for file_id in file_ids:
+        try:
+            api_client.files.delete(file_id)
+            if verbose:
+                print(f"[cleanup] deleted {file_id}", file=stream)
+        except Exception as e:
+            if verbose:
+                print(f"[cleanup] failed to delete {file_id}: {e}", file=stream)
 
 
 def _log_response(response: Any, stream: TextIO) -> None:

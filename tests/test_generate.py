@@ -48,6 +48,35 @@ def test_build_input_missing_file_raises(tmp_path: Path):
         generate.build_input("x", [tmp_path / "missing.md"])
 
 
+def test_build_input_with_pdf_uses_file_id(tmp_path: Path):
+    pdf = tmp_path / "story.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n\xd3\xeb\xe9\xe1binary")
+
+    payload = generate.build_input(
+        "describe this", [pdf], file_id_map={pdf: "file_abc123"}
+    )
+
+    assert isinstance(payload, list)
+    parts = payload[0]["content"]
+    assert parts[1] == {"type": "input_file", "file_id": "file_abc123"}
+
+
+def test_build_input_pdf_without_file_id_raises(tmp_path: Path):
+    pdf = tmp_path / "story.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    with pytest.raises(ValueError, match="Files API"):
+        generate.build_input("x", [pdf])
+
+
+def test_build_input_unreadable_text_file_raises_value_error(tmp_path: Path):
+    blob = tmp_path / "notes.bin"
+    blob.write_bytes(b"\xd3\xeb\xe9\xe1")
+
+    with pytest.raises(ValueError, match="cannot read"):
+        generate.build_input("x", [blob])
+
+
 def test_write_images_numbers_from_one(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     b64 = base64.b64encode(b"hello").decode()
@@ -124,6 +153,40 @@ def test_run_verbose_requests_reasoning_and_dumps_output(
     assert "type=reasoning" in err
     assert "thinking about otters" in err
     assert "type=image_generation_call" in err
+
+
+def test_run_uploads_pdf_and_cleans_up(tmp_path: Path, monkeypatch, fake_openai_client):
+    monkeypatch.chdir(tmp_path)
+    pdf = tmp_path / "story.pdf"
+    pdf.write_bytes(b"%PDF-1.4\nbinary")
+
+    fake_openai_client.files.create.return_value = SimpleNamespace(id="file_xyz")
+
+    generate.run("describe this", [pdf], "out", client=fake_openai_client)
+
+    fake_openai_client.files.create.assert_called_once()
+    create_kwargs = fake_openai_client.files.create.call_args.kwargs
+    assert create_kwargs["purpose"] == "user_data"
+
+    payload = fake_openai_client.responses.create.call_args.kwargs["input"]
+    parts = payload[0]["content"]
+    assert {"type": "input_file", "file_id": "file_xyz"} in parts
+
+    fake_openai_client.files.delete.assert_called_once_with("file_xyz")
+
+
+def test_run_deletes_uploaded_files_on_api_error(tmp_path: Path, monkeypatch, fake_openai_client):
+    monkeypatch.chdir(tmp_path)
+    pdf = tmp_path / "story.pdf"
+    pdf.write_bytes(b"%PDF-1.4\nbinary")
+
+    fake_openai_client.files.create.return_value = SimpleNamespace(id="file_xyz")
+    fake_openai_client.responses.create.side_effect = RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        generate.run("x", [pdf], "out", client=fake_openai_client)
+
+    fake_openai_client.files.delete.assert_called_once_with("file_xyz")
 
 
 def test_run_raises_when_no_image_in_response(tmp_path: Path, monkeypatch, fake_openai_client):
